@@ -50,5 +50,5 @@ task_requirements([2,2]).
   .print("finished");
 
   // example use of the invokeAction operation of the ThingArtifact 
-  //invokeAction(ActionTag, PayloadTags, Payload)
+  invokeAction(ActionTag, PayloadTags, Payload)
   .

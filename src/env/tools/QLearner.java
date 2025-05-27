@@ -62,16 +62,14 @@ public class QLearner extends Artifact {
     Double epsilon = Double.valueOf(epsilonObj.toString());
     Integer reward = Integer.valueOf(rewardObj.toString());
 
-    // 2. Prepare Q-table
     int goalKey = Arrays.hashCode(goalDescription);
     double[][] qTable = qTables.getOrDefault(goalKey, initializeQTable());
 
-    // Convert goalDescription to List<Object> for compatibility
     List<Object> goalDescList = Arrays.asList(goalDescription);
     Set<Integer> goalSet = new HashSet<>(lab.getCompatibleStates(goalDescList));
 
     Random rnd = new Random();
-    int maxStepsPerEpisode = 1000;
+    int maxStepsPerEpisode = 100;
     
 
     for (int ep = 0; ep < episodes; ep++) {
@@ -134,7 +132,7 @@ public class QLearner extends Artifact {
 
   // 5. Persist and report
   qTables.put(goalKey, qTable);
-  LOGGER.info("Finished training Q-table for goal " + Arrays.toString(goalDescription));
+  LOGGER.info("Finished training Q table for goal " + Arrays.toString(goalDescription));
 
   printQTable(qTable);
   
@@ -153,6 +151,7 @@ public class QLearner extends Artifact {
 **/
 
 @OPERATION
+/* 
 public void getActionFromState(Object[] goalDescription, Object[] currentStateDescription,
     OpFeedbackParam<String> nextBestActionTag, OpFeedbackParam<Object[]> nextBestActionPayloadTags,
     OpFeedbackParam<Object[]> nextBestActionPayload) {
@@ -170,6 +169,49 @@ public void getActionFromState(Object[] goalDescription, Object[] currentStateDe
       Object payload[] = { true };
       nextBestActionPayload.set(payload);
     }
+    */
+    public void getActionFromState(Object[] goalDescription,
+                                 Object[] currentStateDescription,
+                                 OpFeedbackParam<String> nextBestActionTag,
+                                 OpFeedbackParam<Object[]> nextBestActionPayloadTags,
+                                 OpFeedbackParam<Object[]> nextBestActionPayload) {
+    int goalKey = Arrays.hashCode(goalDescription);
+    double[][] qTable = qTables.get(goalKey);
+    if (qTable == null) {
+      LOGGER.warning("No Q table for goal " + Arrays.toString(goalDescription));
+      return;
+    }
+
+    List<Object> stateDescList = Arrays.asList(currentStateDescription);
+    List<Integer> compatibles = lab.getCompatibleStates(stateDescList);
+    if (compatibles.isEmpty()) {
+      LOGGER.warning("No compatible state for description "
+                     + Arrays.toString(currentStateDescription));
+      return;
+    }
+    int state = compatibles.get(0);
+
+    List<Integer> applicable = lab.getApplicableActions(state);
+    if (applicable.isEmpty()) {
+      LOGGER.warning("No applicable actions in state " + state);
+      return;
+    }
+    int bestAction = applicable.get(0);
+    double bestQ = qTable[state][bestAction];
+    for (int a : applicable) {
+      if (qTable[state][a] > bestQ) {
+        bestQ = qTable[state][a];
+        bestAction = a;
+      }
+    }
+
+    Action act = lab.getAction(bestAction);
+    nextBestActionTag.set(act.getActionTag());
+    nextBestActionPayloadTags.set(act.getPayloadTags());
+    nextBestActionPayload.set(act.getPayload());
+
+    LOGGER.info("getActionFromState for: state=" + state + ", action=" + act + ", Q=" + bestQ);
+  }
     
 
     /**
