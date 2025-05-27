@@ -15,7 +15,7 @@ learning_lab_environment("https://raw.githubusercontent.com/Interactions-HSG/exa
 // the agent believes that the task that takes place in the 1st workstation requires an indoor illuminance
 // level of Rank 2, and the task that takes place in the 2nd workstation requires an indoor illumincance 
 // level of Rank 3. Modify the belief so that the agent can learn to handle different goals.
-task_requirements([2,3]).
+task_requirements([2,2]).
 
 /* Initial goals */
 !start. // the agent has the goal to start
@@ -44,6 +44,10 @@ task_requirements([2,3]).
   // example use of the getActionFromState operation of the QLearner artifact
   // relevant for Task 2.3
   getActionFromState([1,1], [0, 0, false, false, false, false, 3], ActionTag, PayloadTags, Payload);
+
+  .print("starting q learner");
+  calculateQ([Z1Level, Z2Level], 10, 0.5, 0.9, 0.4, 10000);
+  .print("finished");
 
   // example use of the invokeAction operation of the ThingArtifact 
   //invokeAction(ActionTag, PayloadTags, Payload)

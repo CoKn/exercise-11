@@ -61,6 +61,82 @@ public class QLearner extends Artifact {
     Double gamma = Double.valueOf(gammaObj.toString());
     Double epsilon = Double.valueOf(epsilonObj.toString());
     Integer reward = Integer.valueOf(rewardObj.toString());
+
+    // 2. Prepare Q-table
+    int goalKey = Arrays.hashCode(goalDescription);
+    double[][] qTable = qTables.getOrDefault(goalKey, initializeQTable());
+
+    // Convert goalDescription to List<Object> for compatibility
+    List<Object> goalDescList = Arrays.asList(goalDescription);
+    Set<Integer> goalSet = new HashSet<>(lab.getCompatibleStates(goalDescList));
+
+    Random rnd = new Random();
+    int maxStepsPerEpisode = 1000;
+    
+
+    for (int ep = 0; ep < episodes; ep++) {
+      for (int i = 0; i < 3; i++) {
+          lab.performAction(rnd.nextInt(actionCount));
+      }
+      int state = lab.readCurrentState();
+      boolean done = goalSet.contains(state);
+      int steps = 0;
+
+      while (!done && steps < maxStepsPerEpisode) {
+          steps++;
+
+          List<Integer> actions = lab.getApplicableActions(state);
+          if (actions.isEmpty()) break;
+          int action;
+          if (rnd.nextDouble() < epsilon) {
+              action = actions.get(rnd.nextInt(actions.size()));
+          } else {
+              action = actions.get(0);
+              double bestQ = qTable[state][action];
+              for (int a : actions) {
+                  if (qTable[state][a] > bestQ) {
+                      bestQ = qTable[state][a];
+                      action = a;
+                  }
+              }
+          }
+
+          tools.Action act = lab.getAction(action);
+          lab.performAction(action);
+          int nextState = lab.readCurrentState();
+          boolean reached = goalSet.contains(nextState);
+
+          double cost = 0;
+          String tag = act.getActionTag();
+          Object payload = act.getPayload()[0];
+          if (tag.endsWith("#SetZ1Light") || tag.endsWith("#SetZ2Light")) {
+              // turning a light on costs 50; turning it off costs 0
+              if (Boolean.TRUE.equals(payload)) cost = 50;
+          } else {
+              // raising blinds costs 1; lowering costs 0
+              if (Boolean.TRUE.equals(payload)) cost = 1;
+          }
+
+          double r = reached
+                     ? (reward - cost)
+                     : (-cost);
+
+          double maxNextQ = 0;
+          for (double qv : qTable[nextState]) {
+              if (qv > maxNextQ) maxNextQ = qv;
+          }
+          qTable[state][action] += alpha * (r + gamma * maxNextQ - qTable[state][action]);
+
+          state = nextState;
+          done  = reached;
+      }
+  }
+
+  // 5. Persist and report
+  qTables.put(goalKey, qTable);
+  LOGGER.info("Finished training Q-table for goal " + Arrays.toString(goalDescription));
+
+  printQTable(qTable);
   
   }
 
@@ -75,24 +151,26 @@ public class QLearner extends Artifact {
 * @param  nextBestActionPayloadTags the (returned) semantic annotations of the payload of the next best action, e.g. [Z1Light]
 * @param nextBestActionPayload the (returned) payload of the next best action, e.g. true
 **/
-  @OPERATION
-  public void getActionFromState(Object[] goalDescription, Object[] currentStateDescription,
-      OpFeedbackParam<String> nextBestActionTag, OpFeedbackParam<Object[]> nextBestActionPayloadTags,
-      OpFeedbackParam<Object[]> nextBestActionPayload) {
-         
-        // remove the following upon implementing Task 2.3!
 
-        // sets the semantic annotation of the next best action to be returned 
-        nextBestActionTag.set("http://example.org/was#SetZ1Light");
+@OPERATION
+public void getActionFromState(Object[] goalDescription, Object[] currentStateDescription,
+    OpFeedbackParam<String> nextBestActionTag, OpFeedbackParam<Object[]> nextBestActionPayloadTags,
+    OpFeedbackParam<Object[]> nextBestActionPayload) {
+        
+      // remove the following upon implementing Task 2.3!
 
-        // sets the semantic annotation of the payload of the next best action to be returned 
-        Object payloadTags[] = { "Z1Light" };
-        nextBestActionPayloadTags.set(payloadTags);
+      // sets the semantic annotation of the next best action to be returned 
+      nextBestActionTag.set("http://example.org/was#SetZ1Light");
 
-        // sets the payload of the next best action to be returned 
-        Object payload[] = { true };
-        nextBestActionPayload.set(payload);
-      }
+      // sets the semantic annotation of the payload of the next best action to be returned 
+      Object payloadTags[] = { "Z1Light" };
+      nextBestActionPayloadTags.set(payloadTags);
+
+      // sets the payload of the next best action to be returned 
+      Object payload[] = { true };
+      nextBestActionPayload.set(payload);
+    }
+    
 
     /**
     * Print the Q matrix
